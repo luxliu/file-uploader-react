@@ -1,0 +1,45 @@
+# How to do: https://luxliu.github.io/post/use-circleci-to-implement-cicd-of-front-end-code-and-deploy-to-aws-s3/
+
+version: 2.1
+orbs:
+  node: circleci/node@1.1.6
+  aws-s3: circleci/aws-s3@1.0.15
+jobs:
+  test-and-build:
+    executor:
+      name: node/default
+    steps:
+      - checkout
+      - node/with-cache:
+          steps:
+            - run: npm install
+            - run: npm test
+      - run: npm run build
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/build
+  deploy-to-s3:
+    machine:
+      image: circleci/classic:latest
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/
+      - aws-s3/sync:
+          arguments: |
+            --acl public-read \
+            --cache-control "max-age=86400"
+          from: build
+          to: 's3://my-circleci-example'
+          overwrite: true # default is false
+workflows:
+  build-and-deploy:
+    jobs:
+      - test-and-build
+      - deploy-to-s3:
+          requires:
+            - test-and-build
+          filters:
+            branches:
+              only: master
